@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary: #FF612B;
+    --background: #FAF8F2;
+    --accent: #D9F6FA;
+    --navy: #002677;
+    --gray-dark: #4B4D4F;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--gray-dark);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+      sans-serif;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-white px-6 py-3 rounded-lg font-medium hover:opacity-90 transition-opacity;
+  }
+
+  .btn-secondary {
+    @apply bg-navy text-white px-6 py-3 rounded-lg font-medium hover:opacity-90 transition-opacity;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-2 border-2 border-gray-300 rounded-lg;
+  }
+
+  .input-field:focus {
+    @apply border-primary outline-none;
+  }
+
+  .card {
+    @apply bg-white rounded-lg shadow-lg p-6;
+  }
+}

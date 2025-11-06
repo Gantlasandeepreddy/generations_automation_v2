@@ -13,3 +13,12 @@ wheels/
 .env
 downloads/
 historic_outputs/
+node_modules/
+.claude/
+.playwright-mcp/
+.next/
+jobs.db
+jobs_queue.db-wal
+backend/workers/jobs_queue.db
+backend/jobs_queue.db
+backend/jobs_queue.db-shm

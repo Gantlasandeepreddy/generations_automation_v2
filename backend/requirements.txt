@@ -1,0 +1,31 @@
+# FastAPI and server
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Job queue
+huey
+
+# Security and auth
+python-jose[cryptography]
+passlib[bcrypt]
+python-dotenv
+
+# Database
+aiosqlite
+
+# Selenium (existing dependencies)
+selenium
+
+# Data processing (existing dependencies)
+pandas
+openpyxl
+lxml
+beautifulsoup4
+
+# Utilities
+pydantic
+pydantic-settings
+pydantic[email]
+
+core
