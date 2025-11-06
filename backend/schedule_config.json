@@ -1,0 +1,10 @@
+{
+  "weekly_enabled": true,
+  "weekly_day": 3,
+  "weekly_hour": 15,
+  "weekly_minute": 54,
+  "monthly_enabled": false,
+  "monthly_day": 1,
+  "monthly_hour": 9,
+  "monthly_minute": 0
+}

@@ -17,7 +17,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from automation.config import MAX_STEP_DELAY, DEFAULT_TIMEOUT, FRAME_TIMEOUT
 
 
-def build_driver(download_dir: Path, session_id: str, headless: bool = True) -> webdriver.Chrome:
+def build_driver(download_dir: Path, headless: bool = True) -> webdriver.Chrome:
     """Build Chrome WebDriver with optimized settings for automation."""
     options = Options()
     if headless:

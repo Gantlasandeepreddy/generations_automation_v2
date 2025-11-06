@@ -4,173 +4,385 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FastAPI + Next.js automation tool that extracts client notes from Generations IDB system. Migrated from Streamlit to enable 5-10 concurrent users with background job processing.
+Single-user automation system that extracts client notes from Generations IDB with scheduled and manual execution capabilities.
 
-**Architecture:** FastAPI backend → Huey workers (SQLite queue) → Selenium automation → Excel generation
+**Architecture:** FastAPI backend with APScheduler → Selenium automation → JSON audit trail → Excel generation
+
+**Tech Stack:**
+- Backend: FastAPI, APScheduler, Selenium, Pydantic
+- Frontend: Next.js 14, TypeScript, Tailwind CSS
+- Storage: JSON files (no database)
 
 ## Development Commands
 
 ### Setup
 
-```powershell
+```bash
 # Backend
 cd backend
 python -m venv venv
-.\venv\Scripts\activate
+.\venv\Scripts\activate  # Windows
+# source venv/bin/activate  # Mac/Linux
 pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with credentials
 
 # Frontend
 cd frontend
 npm install
 ```
 
-### Running Development Environment
+### Running Development
 
-**Three terminals required:**
+**Two terminals required:**
 
-```powershell
-# Terminal 1: API Server (port 8000)
+```bash
+# Terminal 1: Backend (port 8000)
 cd backend
-.\venv\Scripts\python.exe start_api.py
+python main.py
 
-# Terminal 2: Background Worker
-cd backend
-.\venv\Scripts\python.exe start_worker.py
-
-# Terminal 3: Frontend (port 3000)
+# Terminal 2: Frontend (port 3000)
 cd frontend
 npm run dev
 ```
 
 ### Testing
 
-```powershell
+```bash
 # Health check
-curl http://localhost:8000/health
+curl http://localhost:8000/api/health
 
-# API docs (Swagger)
-# Open: http://localhost:8000/docs
-
-# Database inspection
-cd backend
-.\venv\Scripts\python.exe -c "import sqlite3; conn = sqlite3.connect('jobs.db'); print(conn.execute('SELECT job_id, status, total_clients, processed_clients FROM jobs ORDER BY created_at DESC LIMIT 5').fetchall())"
+# API docs (FastAPI Swagger)
+open http://localhost:8000/docs
 
 # Frontend
-# Open: http://localhost:3000
+open http://localhost:3000
 ```
 
-### Build Production
-
-```powershell
-# Frontend
-cd frontend
-npm run build
-npm run start
-
-# Backend (no build step, runs via uvicorn)
-```
-
-## Architecture Overview
+## Architecture
 
 ### Request Flow
 
 ```
-Browser (Next.js) → FastAPI API → Huey Queue → Worker Process
+User → Next.js (localhost:3000) → FastAPI (localhost:8000) → Selenium → Generations IDB
                                         ↓
-                                   Selenium → Generations IDB
+                                  APScheduler
                                         ↓
-                                   SQLite DB (status/logs)
+                                  JSON audit trail
 ```
 
 ### Key Components
 
-1. **FastAPI API** (`backend/main.py`): REST endpoints for auth, job submission, status polling, file downloads
-2. **Huey Worker** (`backend/workers/`): Background job processor with SQLite queue
-3. **Session Manager** (`backend/core/session_manager.py`): Keep-alive pings every 5 min to prevent Generations timeout
-4. **Automation Layer** (`backend/automation/`): Selenium scripts (from original Streamlit project)
-5. **Next.js Frontend** (`frontend/`): 4-step wizard UI with real-time status polling
+**Backend (`backend/`):**
+- `main.py` - FastAPI app, routes, SSE streaming, automation orchestration
+- `core/config.py` - Pydantic settings with dynamic paths (project-relative)
+- `core/scheduler.py` - APScheduler for weekly/monthly jobs
+- `core/session_manager.py` - Generations session keep-alive (5-min ping)
+- `db/audit.py` - JSON-based audit trail and logging
+- `automation/selenium_helpers.py` - Browser setup, retry decorators
+- `automation/report_automation.py` - Login, report export, column selection
+- `automation/client_search.py` - Client navigation, personal data extraction
+- `automation/data_processing.py` - Excel/HTML to JSON conversion
+- `automation/mapping_excel.py` - JSON to Excel template mapping
 
-### Database Structure
-
-**SQLite (`jobs.db`):**
-- `jobs` table: job_id, status, user_email, client counts, file paths, logs
-- Status values: `queued` → `processing` → `completed` or `failed`
-- Logs stored as append-only text field
-
-**SQLite (`jobs_queue.db`):**
-- Managed by Huey
-- Stores queued tasks and results
+**Frontend (`frontend/`):**
+- `app/page.tsx` - Main tabbed interface (Dashboard, Manual Run, Schedule)
+- `components/Dashboard.tsx` - Run history with download links
+- `components/ManualRun.tsx` - Manual trigger with SSE log streaming
+- `components/ScheduleConfig.tsx` - Weekly/monthly scheduler UI
+- `lib/api.ts` - Type-safe API client with SSE support
 
 ## Critical Implementation Details
 
-### Import Path Handling
+### 1. Function Modification Rule
 
-**CRITICAL:** All entry point files MUST include dynamic path setup:
+**CRITICAL:** Always modify existing functions, never create duplicates or backups.
 
+Why: If you create `function_new()` but code still calls `function()`, changes won't apply.
+
+Example:
 ```python
-import sys
-from pathlib import Path
+# ❌ WRONG - Creates duplicate
+def export_report_old(...):  # Original
+def export_report(...):      # New version - but old one still called
 
-# Add backend directory to Python path
-backend_dir = Path(__file__).resolve().parent  # or .parent.parent for nested files
-sys.path.insert(0, str(backend_dir))
-
-# Now imports work regardless of CWD
-from core.config import settings
+# ✅ CORRECT - Modify existing
+def export_report(...):      # Same function, updated logic
 ```
 
-**Files with this pattern:**
-- `backend/main.py`
-- `backend/start_api.py`
-- `backend/start_worker.py`
-- `backend/workers/automation_worker.py`
-- `backend/workers/tasks.py`
+### 2. Dynamic Path Resolution
 
-**Why:** Allows running scripts from any directory without ModuleNotFoundError.
-
-### Session Keep-Alive Mechanism
-
-**Problem:** Generations IDB logs out after ~5 minutes of idle time.
-
-**Solution:** `GenerationsSession` class in `backend/core/session_manager.py`:
+All paths are **project-relative** for cross-platform compatibility:
 
 ```python
-# Before each client operation:
-session.keep_alive()  # Pings if idle > 5 minutes
-session.update_activity()  # Updates timestamp after operation
+# ✅ CORRECT - Relative to project root
+sessions_dir = str(Path(__file__).resolve().parent.parent.parent / "automation_sessions")
 
-# Automatic re-login (3 attempts) if session dies:
-session.relogin()
+# ❌ WRONG - Hardcoded absolute path
+sessions_dir = "C:/automation_sessions"
 ```
 
-**Implementation:** Executes lightweight JavaScript to keep session alive:
+**Directory Structure:**
+```
+project_root/
+├── automation_sessions/  # Session data (relative)
+├── chrome-profiles/      # Chrome profiles (relative)
+├── downloads/            # Output Excel files (relative)
+└── backend/
+    ├── audit_trail.json  # Audit logs (relative to backend/)
+    └── schedule_config.json
+```
+
+Can override in `.env` with absolute paths if needed.
+
+### 3. Client Processing Logic
+
+**Scheduled Automation:** Processes **ALL clients** (max_clients=0)
+**Manual Automation:** User specifies count (0 = all, N = limit to N)
+
 ```python
-driver.execute_script("return document.readyState")
+# In process_clients_from_json()
+if max_clients == 0:
+    clients_to_process = total_clients  # ALL
+else:
+    clients_to_process = min(total_clients, max_clients)  # LIMITED
 ```
 
-### Selenium Automation Quirks
+**Important:** Scheduled runs ALWAYS process all clients automatically.
 
-1. **Double Page Refresh Required:**
-   - After report export, MUST refresh page twice before navigating to Client List
-   - This is a Generations system quirk, not a bug
-   - Don't remove this behavior
+### 4. JSON Data Structure
 
-2. **Frame Context Switching:**
-   - Generations uses nested iframes
-   - Use `try_switch_to_panel_context()` helper from `selenium_helpers.py`
-   - Always fallback to main content
+**Client Notes JSON:**
+```json
+{
+  "FirstName": "John",
+  "LastName": "Doe",
+  "DateofBirth": "01/15/1980",
+  "Status": "A",
+  "MedicalRec.#": "12345",
+  ...
+}
+```
 
-3. **JavaScript Click Required:**
-   - Standard `.click()` often fails
-   - Use: `driver.execute_script("arguments[0].click()", element)`
+**Enriched JSON (after processing):**
+```json
+{
+  "FirstName": "John",
+  "LastName": "Doe",
+  "personal_data": {
+    "phone_1": "555-1234",
+    "address_1": "123 Main St",
+    "city": "Springfield",
+    ...
+  }
+}
+```
 
-4. **Stale Element Handling:**
-   - Wrapped with `@retry_on_stale_element` decorator (5 retries)
-   - Applied to all element interactions
+**Excel generation only processes records with `personal_data` key.**
 
-### Organization Brand Colors
+### 5. Session Keep-Alive Mechanism
 
-**Defined in `frontend/tailwind.config.ts`:**
+Generations IDB logs out after 5 minutes idle.
+
+```python
+session = GenerationsSession(driver, credentials, run_id)
+
+# Before each client operation
+session.keep_alive()  # Pings if idle > 5 min
+
+# After each operation
+session.update_activity()  # Updates timestamp
+```
+
+Implementation: Executes `driver.execute_script("return document.readyState")` to keep session alive.
+
+### 6. Date Format Conversion
+
+UI sends dates as `YYYY-MM-DD` (ISO format)
+Generations expects `MM/DD/YYYY` (US format)
+
+**Always convert before passing to automation:**
+
+```python
+from datetime import datetime
+start_obj = datetime.strptime(date_range['start_date'], '%Y-%m-%d')
+start_str = start_obj.strftime('%m/%d/%Y')
+```
+
+### 7. File Encoding
+
+**Always use UTF-8** (client notes contain special characters):
+
+```python
+# Reading
+with open(json_file, 'r', encoding='utf-8') as f:
+    data = json.load(f)
+
+# Writing
+with open(json_file, 'w', encoding='utf-8') as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+```
+
+### 8. Selenium Automation Quirks
+
+**Double Page Refresh Required:**
+After report export, MUST refresh page twice before navigating to Client List. This is a Generations system quirk.
+
+**JavaScript Click Required:**
+Standard `.click()` often fails. Use:
+```python
+driver.execute_script("arguments[0].click()", element)
+```
+
+**Frame Context Switching:**
+Generations uses nested iframes. Use `try_switch_to_panel_context()` from `selenium_helpers.py`.
+
+**Stale Element Handling:**
+Wrapped with `@retry_on_stale_element` decorator (5 retries with exponential backoff).
+
+**Window Management:**
+Each client search opens new tabs. Must track and close properly:
+```python
+original_window = driver.current_window_handle
+# ... open client details in new tab ...
+driver.close()  # Close client tab
+driver.switch_to.window(original_window)  # Return to main tab
+```
+
+### 9. Name Parsing from JSON
+
+Client names in JSON are **separate fields**, not comma-delimited:
+
+```python
+# ✅ CORRECT
+first_name = client.get('FirstName', '').strip()
+last_name = client.get('LastName', '').strip()
+
+# ❌ WRONG - 'Client Name' doesn't exist
+client_name = client.get('Client Name', '')
+last, first = client_name.split(',')
+```
+
+**Handle "ECM" suffix:**
+Last names may contain " ECM" suffix (e.g., "Smith ECM"). Strip for search but keep original for matching.
+
+### 10. Path Object vs String Handling
+
+Functions receive Path objects, not strings:
+
+```python
+# ✅ CORRECT - Handle Path objects
+if isinstance(json_file_path, str):
+    enriched_path = json_file_path.replace('.json', '_enriched.json')
+else:
+    enriched_path = json_file_path.parent / f"{json_file_path.stem}_enriched.json"
+
+# ❌ WRONG - Assumes string
+enriched_path = json_file_path.replace('.json', '_enriched.json')
+```
+
+## Automation Workflow
+
+### Complete Flow
+
+1. **Login** to Generations IDB
+2. **Find** "Client Notes" report in dropdown
+3. **Export** report with date range (converts dates to MM/DD/YYYY)
+4. **Double refresh** page (Generations system requirement)
+5. **Convert** Excel/HTML → JSON (handles HTML tables exported as .xls)
+6. **Process clients:**
+   - Store original window handle
+   - For each client (up to max_clients):
+     - Switch to original window
+     - Call `keep_alive()` before processing
+     - Navigate to Client List (opens new tab)
+     - Search by "LastName FirstName"
+     - Click client link (opens details tab)
+     - Click Personal Data tab
+     - Extract 15 personal data fields
+     - Close client tabs
+     - Update JSON with nested `personal_data`
+     - Call `update_activity()` after
+7. **Generate** Excel from enriched JSON using template mapping
+8. **Save** to `downloads/` directory
+9. **Record** in audit trail JSON
+
+### Scheduled Automation Date Ranges
+
+**Weekly:** Last 7 days from execution time
+**Monthly:** Last 30 days from execution time
+
+Calculated dynamically in `core/scheduler.py`:
+```python
+end_date = datetime.now()
+start_date = end_date - timedelta(days=7)  # or days=30
+```
+
+## Configuration
+
+### Environment Variables
+
+**Required:**
+```bash
+GENERATIONS_AGENCY_ID=your_agency_id
+GENERATIONS_EMAIL=your_email@example.com
+GENERATIONS_PASSWORD=your_password
+
+UI_EMAIL=admin@example.com
+UI_PASSWORD=changeme
+```
+
+**Optional (defaults to project subdirectories):**
+```bash
+# Only set these for custom absolute paths
+SESSIONS_DIR=/custom/path/sessions
+CHROME_PROFILES_DIR=/custom/path/profiles
+
+LOG_LEVEL=INFO
+```
+
+### Important Constants
+
+- `idle_threshold = 300` - 5 minutes (session timeout)
+- `EXPORT_MAX_RETRIES = 7` - Report export attempts
+- `DOWNLOAD_TIMEOUT = 180` - File download wait time (seconds)
+- `DEFAULT_TIMEOUT = 20` - Element wait timeout (seconds)
+- `COLUMN_MAX_RETRIES = 3` - Column selection retries
+
+## API Routes
+
+```
+POST   /api/login                         # UI authentication
+POST   /api/logout                        # UI logout
+GET    /api/health                        # Health + scheduler status
+POST   /api/automation/run                # Trigger manual (SSE stream)
+GET    /api/automation/history            # Get all runs
+GET    /api/automation/download/{run_id}  # Download Excel
+GET    /api/schedule                      # Get schedule config
+POST   /api/schedule                      # Update schedule (restarts scheduler)
+```
+
+**SSE Stream Format:**
+```
+data: {"type": "log", "message": "Processing client..."}
+data: {"type": "status", "status": "completed", "filePath": "...", "runId": "..."}
+```
+
+## Frontend State Management
+
+Uses React hooks (`useState`, `useEffect`) with SSE for real-time updates:
+
+```typescript
+// SSE connection for live logs
+const eventSource = new EventSource(`${API_URL}/api/automation/run`);
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  if (data.type === 'log') setLogs(prev => [...prev, data.message]);
+  if (data.type === 'status') handleCompletion(data);
+};
+```
+
+## Brand Colors (Tailwind)
 
 ```typescript
 colors: {
@@ -178,224 +390,95 @@ colors: {
   background: '#FAF8F2',    // Cream - page background
   accent: '#D9F6FA',        // Light blue - progress bars
   navy: '#002677',          // Dark blue - headers
-  'brand-gray': '#4B4D4F',  // Gray - body text (NOT 'gray'!)
+  'brand-gray': '#4B4D4F',  // Gray - body text
 }
 ```
 
-**Important:** Don't use `gray` as custom color name - conflicts with Tailwind's default gray scale.
+**Important:** Use `brand-gray` not `gray` (conflicts with Tailwind defaults).
 
-### Module-Level Code Anti-Pattern
+## Common Issues
 
-**Problem:** Original `mapping2excel.py` had file I/O at module level, causing imports to fail.
+### Client processing skips all clients
+- Check JSON field names: Must be `FirstName` and `LastName`, not `Client Name`
+- Verify name parsing logic doesn't split by comma
 
-**Solution:** All file operations wrapped in `generate_excel_from_json()` function.
+### Automation gets stuck at "Navigating to Client List"
+- Each client opens new tabs - must close properly
+- Check for "already opened" alerts from duplicate Client List tabs
+- Ensure window handle switching before/after each client
 
-**Rule:** When migrating from Streamlit or adding new automation modules:
-- Avoid module-level I/O operations
-- Use function parameters instead of file system scanning
-- Explicitly pass file paths from caller
+### Excel generation processes all 55 clients instead of 2
+- Excel mapping must filter: `members = [m for m in all_members if m.get('personal_data')]`
+- Only records with enriched `personal_data` should be in Excel
 
-## File Organization
+### Path errors (FileNotFoundError with relative paths)
+- Pass full Path objects, not strings to functions
+- Use `output_dir / filename`, not string concatenation
+- Check `.env` doesn't have hardcoded `C:/` paths
 
-### Backend Structure
+### Scheduled automation only processes 10 clients
+- Scheduled runs must use `max_clients=0` (ALL clients)
+- Manual runs respect user input (0 = all, N = limit)
 
-```
-backend/
-├── api/                    # FastAPI route handlers
-│   ├── auth.py            # POST /api/auth/validate
-│   ├── jobs.py            # Job submission, status, cancel
-│   └── files.py           # File downloads
-├── automation/            # Selenium automation (copied from root)
-│   ├── config.py          # Element selectors, timeouts, batch limits
-│   ├── selenium_helpers.py # Browser setup, retry logic
-│   ├── report_automation.py # Login, export report workflow
-│   ├── client_search.py   # Client search, personal data extraction
-│   ├── data_processing.py # File conversion utilities
-│   └── mapping_excel.py   # JSON → KP Excel template
-├── core/                  # Infrastructure
-│   ├── config.py          # Settings (Pydantic)
-│   ├── security.py        # JWT encode/decode
-│   ├── queue.py           # Huey configuration
-│   └── session_manager.py # Keep-alive mechanism
-├── db/                    # Database
-│   ├── database.py        # Schema initialization
-│   └── crud.py            # All database operations
-├── workers/               # Background processing
-│   ├── tasks.py           # Main automation workflow
-│   └── automation_worker.py # Huey consumer entry point
-└── main.py                # FastAPI app
-```
+### Session timeout during long runs
+- `keep_alive()` called before each client
+- `update_activity()` called after each client
+- Check logs for "Keep-alive ping sent"
 
-### Frontend Structure
+## Debugging
 
-```
-frontend/
-├── app/
-│   ├── page.tsx           # Main wizard with step management
-│   └── globals.css        # Tailwind + brand colors
-├── components/wizard/
-│   ├── StepLogin.tsx      # Credential validation
-│   ├── StepConfigure.tsx  # Date range picker
-│   ├── StepProcess.tsx    # Job status polling
-│   └── StepDownload.tsx   # Excel download
-└── lib/
-    ├── api.ts             # Typed API client
-    └── auth.ts            # JWT storage (localStorage)
-```
-
-## Key Configuration Files
-
-### Backend `.env`
-
-```
-JWT_SECRET_KEY=<generate-with-openssl-rand-hex-32>
-SESSIONS_DIR=C:/automation_sessions
-CHROME_PROFILES_DIR=C:/chrome-profiles
-DATABASE_PATH=jobs.db
-QUEUE_DATABASE_PATH=jobs_queue.db
-MAX_CONCURRENT_WORKERS=10
-LOG_LEVEL=INFO
-```
-
-### Frontend `.env.local`
-
-```
-NEXT_PUBLIC_API_URL=http://localhost:8000
-```
-
-### Automation Constants (`backend/automation/config.py`)
+### Run with visible browser
 
 ```python
-MAX_CLIENTS_PER_BATCH = 10  # Don't increase without testing keep-alive
-DOWNLOAD_TIMEOUT = 180       # Seconds to wait for report download
-DEFAULT_TIMEOUT = 20         # Element wait timeout
-EXPORT_MAX_RETRIES = 7       # Export operation retries
+# In backend/main.py, line ~109
+driver = build_driver(download_dir, headless=False)
 ```
 
-## Automation Workflow
+### Check audit trail
 
-**End-to-End Process:**
+```bash
+# View all runs with full logs
+cat backend/audit_trail.json | python -m json.tool
+```
 
-1. **Login** (`report_automation.py:login_and_open_report_writer()`)
-   - Navigate to Generations IDB
-   - Authenticate with credentials
-   - Open Report Writer tab
+### Check schedule configuration
 
-2. **Export Report** (`report_automation.py:export_single_report()`)
-   - Select "Client Notes" report
-   - Set date range, filters, columns
-   - Download as Excel/HTML
-   - Convert to JSON
+```bash
+cat backend/schedule_config.json
+```
 
-3. **Refresh Page Twice** (Required!)
-   - Generations system quirk
-   - Must refresh before client navigation
+### Monitor APScheduler
 
-4. **Process Clients** (Max 10 per batch)
-   - For each client:
-     - Navigate to Client List
-     - Search by name
-     - Extract personal data (15 fields)
-     - Update JSON with nested `personal_data` object
-     - **Keep-alive ping before each client**
+Backend logs show:
+```
+INFO - Scheduler started
+INFO - Scheduled weekly automation: Day 1 at 09:00
+INFO - Running scheduled weekly automation
+```
 
-5. **Generate Excel** (`mapping_excel.py:generate_excel_from_json()`)
-   - Map JSON to KP template columns
-   - Save to session output directory
-   - Return file path
+## Code Style
 
-## Common Issues & Fixes
+- **Backend:** PEP 8, type hints where helpful, human-readable variable names
+- **Frontend:** TypeScript strict mode, explicit types for API responses
+- **No duplicate functions:** Modify existing, don't create backups
+- **Comments:** Explain "why" and non-obvious behavior, not "what"
+- **Logging:** Use `audit_trail.append_log()` for user-facing logs
 
-### Import Errors
+## Production Deployment
 
-**Error:** `ModuleNotFoundError: No module named 'core'`
+See `README.md` for complete setup instructions including:
+- Windows service configuration (NSSM)
+- Reverse proxy setup (nginx)
+- Firewall rules
+- Backup strategies for audit trail and downloads
 
-**Fix:** Add dynamic path setup to file (see "Import Path Handling" above)
+## Reference Implementation
 
-### Tailwind Build Error
+Root directory contains working **Streamlit code** as reference:
+- `/selenium_helpers.py` - Browser setup
+- `/report_automation.py` - Login/export flow
+- `/client_search.py` - Client processing
+- `/data_processing.py` - JSON parsing
+- `/main.py` - Complete workflow
 
-**Error:** `The 'border-gray-300' class does not exist`
-
-**Fix:** Already fixed. Don't use `gray` as custom color - use `brand-gray`.
-
-### Exit on Import
-
-**Error:** `SystemExit: 1` when importing `mapping_excel.py`
-
-**Fix:** Already fixed. All logic wrapped in `generate_excel_from_json()` function.
-
-### Session Timeout
-
-**Error:** Job fails with "Session expired"
-
-**Fix:** Check `idle_threshold` in `session_manager.py` (default 300 seconds). Worker calls `keep_alive()` before each operation.
-
-### Database Locked
-
-**Error:** `database is locked`
-
-**Fix:** Stop all services, delete `jobs.db-shm` and `jobs.db-wal`, restart.
-
-## Windows Deployment
-
-**See:** `DEPLOYMENT.md` for complete Windows VM setup with NSSM services.
-
-**Quick Reference:**
-- Service 1: GenerationsAPI (uvicorn)
-- Service 2: GenerationsWorker (Huey consumer)
-- Service 3: GenerationsFrontend (Next.js)
-- Task Scheduler: Daily cleanup of old session folders
-
-## Testing Workflow
-
-1. Start all 3 services (API, worker, frontend)
-2. Open http://localhost:3000
-3. Step 1: Enter Generations credentials → Validate
-4. Step 2: Select date range (e.g., last 7 days)
-5. Step 3: Submit job → Watch real-time logs (polls every 3 seconds)
-6. Step 4: Download Excel file
-
-## Related Documentation
-
-- `MIGRATION_GUIDE.md` - Streamlit → FastAPI migration details
-- `DEPLOYMENT.md` - Windows VM production deployment
-- `TROUBLESHOOTING.md` - Common issues and solutions
-- `IMPLEMENTATION_SUMMARY.md` - Migration status and checklist
-- `README_NEW.md` - Quick start guide
-
-## Important Constants
-
-### Batch Processing
-- **Max clients per job:** 10 (prevents timeout)
-- **Keep-alive interval:** 5 minutes (300 seconds)
-- **Re-login attempts:** 3
-
-### Timeouts
-- **Download timeout:** 180 seconds
-- **Element wait:** 20 seconds
-- **Export retries:** 7 attempts
-
-### File Paths
-- **Session directories:** `C:/automation_sessions/{job_id}/`
-- **Chrome profiles:** `C:/chrome-profiles/{job_id}/`
-- **Downloads:** `{session_dir}/downloads/`
-- **Output:** `{session_dir}/output/`
-
-## Code Style Notes
-
-- **Backend:** Human-readable Python, avoid AI patterns
-- **Frontend:** TypeScript with explicit types
-- **No duplicate functions:** Modify existing code, don't create backups
-- **Comments:** Explain "why", not "what"
-- **Logging:** Use `crud.append_log()` for job logs, not print statements
-
-## Critical Rules
-
-1. **Never remove double page refresh** - it's a Generations quirk, not a bug
-2. **Always call `session.keep_alive()`** before long operations
-3. **Use `brand-gray` not `gray`** in Tailwind colors
-4. **Add path setup** to any new entry point file
-5. **Wrap all I/O** in functions, not module level
-6. **Test with real credentials** - mocking won't catch Generations quirks
-7. **Max 10 clients per batch** - hardcoded for session stability
-8. **Run worker from backend directory** - queue database location dependent
+When backend automation fails, compare with root Streamlit files to find discrepancies.

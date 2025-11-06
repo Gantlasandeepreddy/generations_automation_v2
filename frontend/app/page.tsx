@@ -1,115 +1,165 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import StepLogin from '../components/wizard/StepLogin'
-import StepConfigure from '../components/wizard/StepConfigure'
-import StepProcess from '../components/wizard/StepProcess'
-import StepDownload from '../components/wizard/StepDownload'
+import { useState } from 'react';
+import { login, logout } from '../lib/api';
+import Dashboard from '../components/Dashboard';
+import ManualRun from '../components/ManualRun';
+import ScheduleConfig from '../components/ScheduleConfig';
+
+type Tab = 'dashboard' | 'manual' | 'schedule';
 
 export default function Home() {
-  const [currentStep, setCurrentStep] = useState(1)
-  const [token, setToken] = useState('')
-  const [credentials, setCredentials] = useState({
-    agency_id: '',
-    email: '',
-    password: '',
-  })
-  const [dateRange, setDateRange] = useState({
-    start_date: '',
-    end_date: '',
-  })
-  const [jobId, setJobId] = useState('')
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
 
-  const handleLoginSuccess = (authToken: string, creds: any) => {
-    setToken(authToken)
-    setCredentials(creds)
-    setCurrentStep(2)
-  }
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    setLoggingIn(true);
 
-  const handleConfigureSuccess = (dates: any) => {
-    setDateRange(dates)
-    setCurrentStep(3)
-  }
+    try {
+      await login(email, password);
+      setIsLoggedIn(true);
+    } catch (err) {
+      setLoginError('Invalid credentials');
+    } finally {
+      setLoggingIn(false);
+    }
+  };
 
-  const handleJobSubmitted = (id: string) => {
-    setJobId(id)
-  }
+  const handleLogout = async () => {
+    await logout();
+    setIsLoggedIn(false);
+    setEmail('');
+    setPassword('');
+    setActiveTab('dashboard');
+  };
 
-  const handleJobComplete = () => {
-    setCurrentStep(4)
-  }
+  if (!isLoggedIn) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-full max-w-md">
+          <div className="bg-white shadow-lg rounded-lg p-8">
+            <div className="text-center mb-8">
+              <h1 className="text-3xl font-bold text-navy mb-2">
+                Generations Automation
+              </h1>
+              <p className="text-brand-gray">
+                Client notes extraction and processing
+              </p>
+            </div>
 
-  const handleStartOver = () => {
-    setCurrentStep(1)
-    setToken('')
-    setCredentials({ agency_id: '', email: '', password: '' })
-    setDateRange({ start_date: '', end_date: '' })
-    setJobId('')
+            <form onSubmit={handleLogin}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-brand-gray mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  placeholder="admin@example.com"
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-brand-gray mb-2">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  placeholder="Enter password"
+                />
+              </div>
+
+              {loginError && (
+                <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded text-sm">
+                  {loginError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loggingIn}
+                className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                {loggingIn ? 'Logging in...' : 'Login'}
+              </button>
+            </form>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-navy mb-2">
-            Generations Automation
-          </h1>
-          <p className="text-gray-600">
-            Automated client notes extraction and processing
-          </p>
+    <main className="min-h-screen bg-background">
+      <nav className="bg-navy text-white shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <h1 className="text-2xl font-bold">Generations Automation</h1>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-white text-navy rounded hover:bg-gray-100 transition font-medium"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="mb-6 border-b border-gray-300">
+          <nav className="flex space-x-8">
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition ${
+                activeTab === 'dashboard'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-brand-gray hover:text-primary hover:border-gray-300'
+              }`}
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => setActiveTab('manual')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition ${
+                activeTab === 'manual'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-brand-gray hover:text-primary hover:border-gray-300'
+              }`}
+            >
+              Manual Run
+            </button>
+            <button
+              onClick={() => setActiveTab('schedule')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition ${
+                activeTab === 'schedule'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-brand-gray hover:text-primary hover:border-gray-300'
+              }`}
+            >
+              Schedule
+            </button>
+          </nav>
         </div>
 
-        {/* Progress indicator */}
-        <div className="flex justify-between mb-8">
-          {[1, 2, 3, 4].map((step) => (
-            <div
-              key={step}
-              className={`flex-1 h-2 rounded ${
-                step <= currentStep ? 'bg-primary' : 'bg-gray-300'
-              } ${step !== 4 ? 'mr-2' : ''}`}
-            />
-          ))}
-        </div>
-
-        {/* Step content */}
-        <div className="card">
-          {currentStep === 1 && (
-            <StepLogin onSuccess={handleLoginSuccess} />
-          )}
-          {currentStep === 2 && (
-            <StepConfigure
-              token={token}
-              credentials={credentials}
-              onSuccess={handleConfigureSuccess}
-              onBack={() => setCurrentStep(1)}
-            />
-          )}
-          {currentStep === 3 && (
-            <StepProcess
-              token={token}
-              credentials={credentials}
-              dateRange={dateRange}
-              onJobSubmitted={handleJobSubmitted}
-              onComplete={handleJobComplete}
-              onBack={() => setCurrentStep(2)}
-            />
-          )}
-          {currentStep === 4 && (
-            <StepDownload
-              jobId={jobId}
-              onStartOver={handleStartOver}
-            />
-          )}
-        </div>
-
-        {/* Step labels */}
-        <div className="mt-4 text-center text-sm text-gray-600">
-          {currentStep === 1 && 'Step 1: Login Validation'}
-          {currentStep === 2 && 'Step 2: Configure Date Range'}
-          {currentStep === 3 && 'Step 3: Processing'}
-          {currentStep === 4 && 'Step 4: Download Results'}
+        <div>
+          {activeTab === 'dashboard' && <Dashboard />}
+          {activeTab === 'manual' && <ManualRun />}
+          {activeTab === 'schedule' && <ScheduleConfig />}
         </div>
       </div>
     </main>
-  )
+  );
 }

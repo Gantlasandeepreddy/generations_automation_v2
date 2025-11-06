@@ -15,12 +15,19 @@ pip install -r requirements.txt
 ### Configure Environment
 Create `.env` file:
 ```
-JWT_SECRET_KEY=your-secret-key-here
-SESSIONS_DIR=C:/automation_sessions
-CHROME_PROFILES_DIR=C:/chrome-profiles
-DATABASE_PATH=jobs.db
-QUEUE_DATABASE_PATH=jobs_queue.db
-MAX_CONCURRENT_WORKERS=10
+# Generations IDB Credentials
+GENERATIONS_AGENCY_ID=your_agency_id
+GENERATIONS_EMAIL=your_email@example.com
+GENERATIONS_PASSWORD=your_password
+
+# UI Login
+UI_EMAIL=admin@example.com
+UI_PASSWORD=changeme
+
+# Directory Paths (Optional - defaults to project subdirectories)
+# SESSIONS_DIR=/path/to/automation_sessions
+# CHROME_PROFILES_DIR=/path/to/chrome-profiles
+
 LOG_LEVEL=INFO
 ```
 

@@ -707,3 +707,153 @@ def _close_existing_client_tabs(driver):
                 driver.switch_to.window(driver.window_handles[0])
         except:
             pass
+
+
+def process_clients_from_json(driver, json_file_path, run_id, session, max_clients=10):
+    """
+    Process clients from a JSON file and enrich with personal data.
+
+    Args:
+        driver: WebDriver instance
+        json_file_path: Path to JSON file with client data
+        run_id: Run identifier for logging
+        session: GenerationsSession for keep-alive
+        max_clients: Maximum number of clients to process
+
+    Returns:
+        Path to enriched JSON file
+    """
+    import json
+
+    print(f"\n{'='*60}")
+    print(f"📋 Processing Clients from JSON")
+    print(f"{'='*60}")
+
+    # Read the JSON file with UTF-8 encoding to handle special characters
+    with open(json_file_path, 'r', encoding='utf-8') as f:
+        clients = json.load(f)
+
+    total_clients = len(clients)
+
+    # max_clients = 0 means process ALL clients
+    if max_clients == 0:
+        clients_to_process = total_clients
+        print(f"📊 Total clients in file: {total_clients}")
+        print(f"🎯 Will process: ALL {clients_to_process} clients")
+    else:
+        clients_to_process = min(total_clients, max_clients)
+        print(f"📊 Total clients in file: {total_clients}")
+        print(f"🎯 Will process: {clients_to_process} clients (limited by max_clients={max_clients})")
+
+    # Store original window handle for returning between clients
+    try:
+        original_window = driver.current_window_handle
+    except Exception as e:
+        print(f"⚠️ Could not get original window handle: {e}")
+        original_window = None
+
+    processed_count = 0
+    failed_count = 0
+
+    for idx, client in enumerate(clients[:clients_to_process], 1):
+        print(f"\n{'─'*60}")
+        print(f"Processing client {idx}/{clients_to_process}")
+        print(f"{'─'*60}")
+
+        # Keep session alive before each client
+        session.keep_alive()
+
+        # Get first and last name from JSON fields
+        first_name = client.get('FirstName', '').strip()
+        last_name = client.get('LastName', '').strip()
+
+        # Create full name for display
+        client_name = f"{last_name}, {first_name}" if first_name and last_name else ''
+
+        if not first_name or not last_name:
+            print(f"⚠️ Skipping client with missing name fields: FirstName='{first_name}', LastName='{last_name}'")
+            failed_count += 1
+            continue
+
+        try:
+            # Make sure we're back to the original window before each search
+            try:
+                if original_window and original_window in driver.window_handles:
+                    driver.switch_to.window(original_window)
+                    print(f"↩️ Switched to original window for client {idx}")
+            except Exception as e:
+                print(f"⚠️ Could not switch to original window: {e}")
+                if driver.window_handles:
+                    driver.switch_to.window(driver.window_handles[0])
+                    original_window = driver.current_window_handle
+
+            # Process client and get personal data
+            personal_data = process_client_with_personal_data(
+                driver,
+                client_name,
+                last_name,
+                first_name
+            )
+
+            if personal_data:
+                # Add personal data to client record
+                client['personal_data'] = personal_data
+                processed_count += 1
+                print(f"✅ Successfully processed: {client_name}")
+            else:
+                client['personal_data'] = {}
+                failed_count += 1
+                print(f"❌ Failed to extract data for: {client_name}")
+
+            session.update_activity()
+
+            # Ensure we're back to original window for next iteration
+            try:
+                if original_window and original_window in driver.window_handles:
+                    if driver.current_window_handle != original_window:
+                        driver.switch_to.window(original_window)
+                        print(f"↩️ Returned to original window after processing")
+            except Exception as e:
+                print(f"⚠️ Could not return to original window: {e}")
+                if driver.window_handles:
+                    original_window = driver.window_handles[0]
+                    driver.switch_to.window(original_window)
+
+            # Small delay between clients
+            time.sleep(1)
+
+        except Exception as e:
+            print(f"❌ Error processing {client_name}: {e}")
+            client['personal_data'] = {}
+            failed_count += 1
+
+            # Ensure we're back to original window even on error
+            try:
+                if original_window and original_window in driver.window_handles:
+                    driver.switch_to.window(original_window)
+            except Exception:
+                if driver.window_handles:
+                    original_window = driver.window_handles[0]
+                    driver.switch_to.window(original_window)
+
+    print(f"\n{'='*60}")
+    print(f"📊 Processing Summary")
+    print(f"{'='*60}")
+    print(f"✅ Successfully processed: {processed_count}")
+    print(f"❌ Failed: {failed_count}")
+    print(f"📈 Total processed: {processed_count + failed_count}/{clients_to_process}")
+
+    # Save enriched JSON with UTF-8 encoding
+    # Handle both string and Path objects
+    if isinstance(json_file_path, str):
+        enriched_path = json_file_path.replace('.json', '_enriched.json')
+    else:
+        # Path object - use parent directory and stem
+        enriched_path = json_file_path.parent / f"{json_file_path.stem}_enriched.json"
+
+    with open(enriched_path, 'w', encoding='utf-8') as f:
+        json.dump(clients, f, indent=2, ensure_ascii=False)
+
+    print(f"💾 Enriched data saved to: {enriched_path}")
+
+    return enriched_path

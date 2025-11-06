@@ -52,6 +52,7 @@ def login_and_open_report_writer(driver, agency_id: str, email: str, password: s
         pass
 
     wait_document_ready(driver)
+    return driver
 
 
 def fetch_report_options(driver):

@@ -95,8 +95,18 @@ def generate_excel_from_json(json_file_path, output_dir):
     json_file_path = Path(json_file_path)
     output_dir = Path(output_dir)
 
-    # Look for KP template in current directory first
-    template_files = list(Path(".").glob("*KP*Template*.xlsx"))
+    # Look for KP template in multiple locations
+    template_files = []
+    search_paths = [
+        Path("."),  # Current directory
+        Path.cwd(),  # Working directory
+        Path(__file__).parent.parent,  # Project root (backend parent)
+    ]
+
+    for search_path in search_paths:
+        template_files = list(search_path.glob("*KP*Template*.xlsx"))
+        if template_files:
+            break
 
     if template_files:
         print(f"Using template: {template_files[0].name}")
@@ -109,9 +119,12 @@ def generate_excel_from_json(json_file_path, output_dir):
 
     # Load JSON data
     with open(json_file_path, "r", encoding='utf-8') as f:
-        members = json.load(f)
+        all_members = json.load(f)
 
-    print(f"Found {len(members)} records to process")
+    # Filter to only members with enriched personal_data
+    members = [m for m in all_members if m.get('personal_data')]
+
+    print(f"Found {len(all_members)} total records, {len(members)} with personal data to process")
 
     # Find the header row in the Excel template (or create header row if new workbook)
     if ws.max_row > 1:

@@ -8,10 +8,10 @@ class GenerationsSession:
     Keeps session alive by performing lightweight operations before idle threshold.
     """
 
-    def __init__(self, driver, credentials, job_id):
+    def __init__(self, driver, credentials, run_id):
         self.driver = driver
         self.credentials = credentials
-        self.job_id = job_id
+        self.run_id = run_id
         self.last_activity = time.time()
         self.idle_threshold = 300  # 5 minutes in seconds
         self.relogin_attempts = 0
@@ -26,13 +26,11 @@ class GenerationsSession:
 
         if idle_time > self.idle_threshold:
             try:
-                # Lightweight action to keep session alive
                 self.driver.execute_script("return document.readyState")
                 self.last_activity = time.time()
-                print(f"[{self.job_id}] Keep-alive ping sent (idle for {int(idle_time)}s)")
+                print(f"[{self.run_id}] Keep-alive ping sent (idle for {int(idle_time)}s)")
             except WebDriverException as e:
-                # Session may have died, attempt re-login
-                print(f"[{self.job_id}] Session appears dead: {e}")
+                print(f"[{self.run_id}] Session appears dead: {e}")
                 self.relogin()
 
     def relogin(self):
@@ -44,10 +42,9 @@ class GenerationsSession:
             raise Exception(f"Max re-login attempts ({self.max_relogin_attempts}) exceeded")
 
         self.relogin_attempts += 1
-        print(f"[{self.job_id}] Attempting re-login ({self.relogin_attempts}/{self.max_relogin_attempts})")
+        print(f"[{self.run_id}] Attempting re-login ({self.relogin_attempts}/{self.max_relogin_attempts})")
 
         try:
-            # Import here to avoid circular dependency
             from automation.report_automation import login_and_open_report_writer
 
             self.driver = login_and_open_report_writer(
@@ -57,8 +54,8 @@ class GenerationsSession:
                 self.credentials['password']
             )
             self.last_activity = time.time()
-            self.relogin_attempts = 0  # Reset on success
-            print(f"[{self.job_id}] Re-login successful")
+            self.relogin_attempts = 0
+            print(f"[{self.run_id}] Re-login successful")
         except Exception as e:
             raise Exception(f"Re-login failed: {e}")
 
