@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { getSchedule, updateSchedule, ScheduleConfig as ConfigType } from '../lib/api';
 
 const DAYS_OF_WEEK = [
@@ -16,6 +17,9 @@ const DAYS_OF_WEEK = [
 const DAYS_OF_MONTH = Array.from({ length: 28 }, (_, i) => i + 1);
 
 export default function ScheduleConfig() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === 'admin';
+
   const [config, setConfig] = useState<ConfigType>({
     weekly_enabled: false,
     weekly_day: 0,
@@ -33,13 +37,17 @@ export default function ScheduleConfig() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    loadSchedule();
-  }, []);
+    if (session?.accessToken) {
+      loadSchedule();
+    }
+  }, [session]);
 
   const loadSchedule = async () => {
+    if (!session?.accessToken) return;
+
     try {
       setLoading(true);
-      const schedule = await getSchedule();
+      const schedule = await getSchedule(session.accessToken);
       setConfig(schedule);
       setError('');
     } catch (err) {
@@ -50,11 +58,13 @@ export default function ScheduleConfig() {
   };
 
   const handleSave = async () => {
+    if (!session?.accessToken || !isAdmin) return;
+
     try {
       setSaving(true);
       setMessage('');
       setError('');
-      await updateSchedule(config);
+      await updateSchedule(session.accessToken, config);
       setMessage('Schedule updated successfully!');
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
@@ -76,6 +86,12 @@ export default function ScheduleConfig() {
     <div className="p-6 max-w-4xl mx-auto">
       <h2 className="text-2xl font-bold text-navy mb-6">Schedule Configuration</h2>
 
+      {!isAdmin && (
+        <div className="mb-6 bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded">
+          Only administrators can modify schedule configuration. You can view the current schedule below.
+        </div>
+      )}
+
       {message && (
         <div className="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
           {message}
@@ -95,7 +111,8 @@ export default function ScheduleConfig() {
             id="weekly-enabled"
             checked={config.weekly_enabled}
             onChange={(e) => setConfig({ ...config, weekly_enabled: e.target.checked })}
-            className="w-5 h-5 text-primary border-gray-300 rounded focus:ring-primary"
+            disabled={!isAdmin}
+            className="w-5 h-5 text-primary border-gray-300 rounded focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <label htmlFor="weekly-enabled" className="ml-3 text-lg font-semibold text-navy">
             Weekly Automation
@@ -111,7 +128,8 @@ export default function ScheduleConfig() {
               <select
                 value={config.weekly_day}
                 onChange={(e) => setConfig({ ...config, weekly_day: parseInt(e.target.value) })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                disabled={!isAdmin}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {DAYS_OF_WEEK.map((day) => (
                   <option key={day.value} value={day.value}>
@@ -131,7 +149,8 @@ export default function ScheduleConfig() {
                 max="23"
                 value={config.weekly_hour}
                 onChange={(e) => setConfig({ ...config, weekly_hour: parseInt(e.target.value) })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                disabled={!isAdmin}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -145,7 +164,8 @@ export default function ScheduleConfig() {
                 max="59"
                 value={config.weekly_minute}
                 onChange={(e) => setConfig({ ...config, weekly_minute: parseInt(e.target.value) })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                disabled={!isAdmin}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -172,7 +192,8 @@ export default function ScheduleConfig() {
             id="monthly-enabled"
             checked={config.monthly_enabled}
             onChange={(e) => setConfig({ ...config, monthly_enabled: e.target.checked })}
-            className="w-5 h-5 text-primary border-gray-300 rounded focus:ring-primary"
+            disabled={!isAdmin}
+            className="w-5 h-5 text-primary border-gray-300 rounded focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <label htmlFor="monthly-enabled" className="ml-3 text-lg font-semibold text-navy">
             Monthly Automation
@@ -188,7 +209,8 @@ export default function ScheduleConfig() {
               <select
                 value={config.monthly_day}
                 onChange={(e) => setConfig({ ...config, monthly_day: parseInt(e.target.value) })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                disabled={!isAdmin}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {DAYS_OF_MONTH.map((day) => (
                   <option key={day} value={day}>
@@ -208,7 +230,8 @@ export default function ScheduleConfig() {
                 max="23"
                 value={config.monthly_hour}
                 onChange={(e) => setConfig({ ...config, monthly_hour: parseInt(e.target.value) })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                disabled={!isAdmin}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -222,7 +245,8 @@ export default function ScheduleConfig() {
                 max="59"
                 value={config.monthly_minute}
                 onChange={(e) => setConfig({ ...config, monthly_minute: parseInt(e.target.value) })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                disabled={!isAdmin}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -247,7 +271,7 @@ export default function ScheduleConfig() {
       <div className="flex gap-4">
         <button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || !isAdmin}
           className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
         >
           {saving ? 'Saving...' : 'Save Schedule'}
@@ -258,7 +282,7 @@ export default function ScheduleConfig() {
           disabled={saving}
           className="px-6 py-3 border border-primary text-primary rounded-lg hover:bg-primary hover:text-white transition font-medium"
         >
-          Reset
+          Refresh
         </button>
       </div>
     </div>

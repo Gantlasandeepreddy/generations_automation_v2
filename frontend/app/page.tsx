@@ -1,15 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { login, logout } from '../lib/api';
+import { useSession, signIn, signOut } from 'next-auth/react';
 import Dashboard from '../components/Dashboard';
 import ManualRun from '../components/ManualRun';
 import ScheduleConfig from '../components/ScheduleConfig';
+import AdminPanel from '../components/AdminPanel';
 
-type Tab = 'dashboard' | 'manual' | 'schedule';
+type Tab = 'dashboard' | 'manual' | 'schedule' | 'admin';
 
 export default function Home() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { data: session, status } = useSession();
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,24 +23,38 @@ export default function Home() {
     setLoggingIn(true);
 
     try {
-      await login(email, password);
-      setIsLoggedIn(true);
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setLoginError('Invalid credentials');
+      }
     } catch (err) {
-      setLoginError('Invalid credentials');
+      setLoginError('An error occurred during login');
     } finally {
       setLoggingIn(false);
     }
   };
 
   const handleLogout = async () => {
-    await logout();
-    setIsLoggedIn(false);
+    await signOut({ redirect: false });
     setEmail('');
     setPassword('');
     setActiveTab('dashboard');
   };
 
-  if (!isLoggedIn) {
+  if (status === 'loading') {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-navy text-lg">Loading...</div>
+      </main>
+    );
+  }
+
+  if (!session?.user) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-full max-w-md">
@@ -108,12 +123,17 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <h1 className="text-2xl font-bold">Generations Automation</h1>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-white text-navy rounded hover:bg-gray-100 transition font-medium"
-            >
-              Logout
-            </button>
+            <div className="flex items-center gap-4">
+              <span className="text-sm">
+                {session.user.email} ({session.user.role})
+              </span>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-white text-navy rounded hover:bg-gray-100 transition font-medium"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </nav>
@@ -151,6 +171,18 @@ export default function Home() {
             >
               Schedule
             </button>
+            {session.user.role === 'admin' && (
+              <button
+                onClick={() => setActiveTab('admin')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition ${
+                  activeTab === 'admin'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-brand-gray hover:text-primary hover:border-gray-300'
+                }`}
+              >
+                Admin
+              </button>
+            )}
           </nav>
         </div>
 
@@ -158,6 +190,7 @@ export default function Home() {
           {activeTab === 'dashboard' && <Dashboard />}
           {activeTab === 'manual' && <ManualRun />}
           {activeTab === 'schedule' && <ScheduleConfig />}
+          {activeTab === 'admin' && session.user.role === 'admin' && <AdminPanel />}
         </div>
       </div>
     </main>

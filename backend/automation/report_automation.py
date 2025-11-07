@@ -385,9 +385,9 @@ def _select_required_columns(driver):
                             driver.execute_script("arguments[0].scrollIntoView(true);", checkbox)
                             time.sleep(0.2)
                             driver.execute_script("arguments[0].click();", checkbox)
-                            print(f"✓ Selected: {column_name} (pattern {i+1})")
+                            print(f"[OK] Selected: {column_name} (pattern {i+1})")
                         else:
-                            print(f"✓ Already selected: {column_name}")
+                            print(f"[OK] Already selected: {column_name}")
                         columns_selected += 1
                         time.sleep(0.2)
                         column_found = True
@@ -404,7 +404,7 @@ def _select_required_columns(driver):
                     time.sleep(1)
         
         if not column_found:
-            print(f"✗ Could not find: {column_name}")
+            print(f"[X] Could not find: {column_name}")
     
     return columns_selected
 
@@ -522,10 +522,10 @@ def _handle_export_and_download(driver, download_dir: Path, option_text: str, st
                     downloaded_file = download_dir / new_file_name
                     
                     if downloaded_file.exists() and downloaded_file.stat().st_size > 0:
-                        print(f"\n✅ Download completed: {downloaded_file.name} ({downloaded_file.stat().st_size} bytes)")
+                        print(f"\n[OK] Download completed: {downloaded_file.name} ({downloaded_file.stat().st_size} bytes)")
                         break
                 else:
-                    print(f"\n⏳ Download in progress... ({len(temp_files)} temporary files)")
+                    print(f"\n[WAIT] Download in progress... ({len(temp_files)} temporary files)")
             
             elapsed = time.time() - start_wait_time
             remaining = max_wait_time - elapsed
@@ -536,10 +536,10 @@ def _handle_export_and_download(driver, download_dir: Path, option_text: str, st
             time.sleep(check_interval)
             
         except Exception as e:
-            print(f"\n⚠️ Error during download monitoring: {e}")
+            print(f"\n[WARN] Error during download monitoring: {e}")
             time.sleep(check_interval)
     else:
-        print(f"\n❌ Download timeout - no file appeared in {max_wait_time} seconds")
+        print(f"\n[ERROR] Download timeout - no file appeared in {max_wait_time} seconds")
         current_files = list(download_dir.glob("*"))
         print(f"Current download directory contains: {[f.name for f in current_files]}")
         raise TimeoutException("Download did not complete in time.")

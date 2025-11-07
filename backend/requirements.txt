@@ -12,6 +12,14 @@ pydantic
 pydantic-settings
 pydantic[email]
 
+# Database
+sqlalchemy
+alembic
+
+# Authentication & Security
+python-jose[cryptography]
+bcrypt
+
 # Selenium automation
 selenium
 

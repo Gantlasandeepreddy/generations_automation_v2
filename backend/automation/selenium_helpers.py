@@ -55,9 +55,9 @@ def wait_document_ready(driver, timeout=30):
         try:
             alert = driver.switch_to.alert
             alert_text = alert.text
-            print(f"⚠️ Alert detected during document ready wait: {alert_text}")
+            print(f"[WARN] Alert detected during document ready wait: {alert_text}")
             alert.accept()
-            print("✅ Alert dismissed, retrying document ready check...")
+            print("[OK] Alert dismissed, retrying document ready check...")
             # Retry once after handling alert
             WebDriverWait(driver, timeout//2).until(lambda d: d.execute_script("return document.readyState") == "complete")
         except Exception:
@@ -268,37 +268,37 @@ def retry_on_stale_element(func, max_retries=3, delay=2):
         try:
             result = func()
             if attempt > 0:
-                print(f"✅ Operation succeeded after {attempt + 1} attempts")
+                print(f"[OK] Operation succeeded after {attempt + 1} attempts")
             return result
             
         except StaleElementReferenceException as e:
             last_exception = e
-            print(f"🔄 Stale element detected on attempt {attempt + 1}/{max_retries}: {str(e)[:100]}")
+            print(f"[RETRY] Stale element detected on attempt {attempt + 1}/{max_retries}: {str(e)[:100]}")
             
             if attempt < max_retries - 1:
                 wait_time = delay * (attempt + 1)
-                print(f"⏳ Waiting {wait_time} seconds before retry...")
+                print(f"[WAIT] Waiting {wait_time} seconds before retry...")
                 time.sleep(wait_time)
                 continue
             else:
-                print("❌ Max retries reached for stale element handling")
+                print("[ERROR] Max retries reached for stale element handling")
                 raise e
                 
         except (TimeoutException, NoSuchElementException) as e:
             last_exception = e
-            print(f"⚠️ Element not found on attempt {attempt + 1}/{max_retries}: {str(e)[:100]}")
+            print(f"[WARN] Element not found on attempt {attempt + 1}/{max_retries}: {str(e)[:100]}")
             
             if attempt < max_retries - 1:
                 wait_time = delay
-                print(f"⏳ Waiting {wait_time} seconds before retry...")
+                print(f"[WAIT] Waiting {wait_time} seconds before retry...")
                 time.sleep(wait_time)
                 continue
             else:
-                print("❌ Max retries reached for element finding")
+                print("[ERROR] Max retries reached for element finding")
                 raise e
                 
         except Exception as e:
-            print(f"❌ Non-retryable error: {type(e).__name__}: {str(e)[:100]}")
+            print(f"[ERROR] Non-retryable error: {type(e).__name__}: {str(e)[:100]}")
             raise e
     
     if last_exception:

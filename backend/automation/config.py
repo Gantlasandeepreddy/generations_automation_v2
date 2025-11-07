@@ -104,5 +104,5 @@ MAX_CLIENTS_PER_BATCH = 10
 # Streamlit Configuration
 DEFAULT_PORT = 8511
 PAGE_TITLE = "Client Notes Downloader"
-PAGE_ICON = "📊"
+PAGE_ICON = "[STATS]"
 LAYOUT = "centered"

@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { runManualAutomation, getDownloadUrl } from '../lib/api';
 
 export default function ManualRun() {
+  const { data: session } = useSession();
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [maxClients, setMaxClients] = useState(10);
@@ -14,6 +16,11 @@ export default function ManualRun() {
   const [error, setError] = useState('');
 
   const handleRun = async () => {
+    if (!session?.accessToken) {
+      setError('Please login to run automation');
+      return;
+    }
+
     if (!startDate || !endDate) {
       setError('Please select both start and end dates');
       return;
@@ -27,6 +34,7 @@ export default function ManualRun() {
 
     try {
       await runManualAutomation(
+        session.accessToken,
         startDate,
         endDate,
         maxClients,
@@ -59,6 +67,36 @@ export default function ManualRun() {
     setCompleted(false);
     setDownloadRunId('');
     setError('');
+  };
+
+  const downloadFile = async (runId: string) => {
+    if (!session?.accessToken) return;
+
+    try {
+      const response = await fetch(getDownloadUrl(runId), {
+        headers: {
+          'Authorization': `Bearer ${session.accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to download file');
+      }
+
+      // Get the blob and create download link
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `automation_${runId}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Failed to download file:', err);
+      setError('Failed to download file. Please try again.');
+    }
   };
 
   return (
@@ -137,13 +175,12 @@ export default function ManualRun() {
           )}
 
           {completed && downloadRunId && (
-            <a
-              href={getDownloadUrl(downloadRunId)}
-              download
+            <button
+              onClick={() => downloadFile(downloadRunId)}
               className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
             >
               Download Excel
-            </a>
+            </button>
           )}
         </div>
       </div>

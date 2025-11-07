@@ -224,7 +224,7 @@ def manage_output_folders():
                         print(f"Could not move {file_path.name}: {e}")
             
             if moved_count > 0:
-                print(f"✅ Moved {moved_count} files to: {historic_session_folder}")
+                print(f"[OK] Moved {moved_count} files to: {historic_session_folder}")
     
     return downloads_folder, historic_folder
 
@@ -237,7 +237,7 @@ def get_clients_from_json_file(json_file_path: Path):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
-        print(f"\n📋 Processing JSON file: {json_file_path.name}")
+        print(f"\n[INFO] Processing JSON file: {json_file_path.name}")
         print(f"Total records in JSON: {len(data)}")
         
         for i, record in enumerate(data):
@@ -251,7 +251,7 @@ def get_clients_from_json_file(json_file_path: Path):
             cleaned_last_name = last_name
             if last_name.endswith(' ECM'):
                 cleaned_last_name = last_name.replace(' ECM', '').strip()
-                print(f"   Cleaned LastName: '{last_name}' → '{cleaned_last_name}'")
+                print(f"   Cleaned LastName: '{last_name}' -> '{cleaned_last_name}'")
             
             # Skip empty names or placeholders
             if (first_name and cleaned_last_name and 
@@ -278,7 +278,7 @@ def get_clients_from_json_file(json_file_path: Path):
         traceback.print_exc()
     
     result = sorted(clients, key=lambda x: x['full_name'])
-    print(f"✅ Found {len(result)} unique clients to process")
+    print(f"[OK] Found {len(result)} unique clients to process")
     
     return result
 
@@ -346,7 +346,7 @@ def update_json_with_personal_data(json_file_path: Path, client_name: str, extra
     try:
         # Parse client name
         if ", " not in client_name:
-            print(f"❌ Invalid client name format: {client_name}")
+            print(f"[ERROR] Invalid client name format: {client_name}")
             return False
         
         # Split the cleaned display name
@@ -404,14 +404,14 @@ def update_json_with_personal_data(json_file_path: Path, client_name: str, extra
             with open(json_file_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
             
-            print(f"✅ Updated {updated_count} record(s) in JSON for {client_name}")
+            print(f"[OK] Updated {updated_count} record(s) in JSON for {client_name}")
             return True
         else:
-            print(f"⚠️ No matching records found in JSON for {client_name}")
+            print(f"[WARN] No matching records found in JSON for {client_name}")
             return False
             
     except Exception as e:
-        print(f"❌ Error updating JSON file: {e}")
+        print(f"[ERROR] Error updating JSON file: {e}")
         import traceback
         traceback.print_exc()
         return False

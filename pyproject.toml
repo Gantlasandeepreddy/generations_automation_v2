@@ -21,4 +21,7 @@ dependencies = [
     "selenium>=4.38.0",
     "uvicorn[standard]>=0.38.0",
     "apscheduler>=3.11.1",
+    "sqlalchemy>=2.0.44",
+    "alembic>=1.17.1",
+    "bcrypt>=5.0.0",
 ]
