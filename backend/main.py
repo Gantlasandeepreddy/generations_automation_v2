@@ -6,16 +6,20 @@ backend_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(backend_dir))
 
 import logging
+import os
 import traceback
 from datetime import datetime
 from typing import Dict, Any, AsyncIterator, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from core.config import settings
 from core.scheduler import automation_scheduler
@@ -77,6 +81,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Generations Automation", lifespan=lifespan)
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -317,6 +326,41 @@ def download_file(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename=Path(file_path).name
     )
+
+
+@app.delete("/api/automation/run/{run_id}")
+def delete_run(
+    run_id: str,
+    current_user: models.User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Delete automation run and associated files (admin only)"""
+    # Get run to retrieve file path before deletion
+    run = crud.get_run_by_run_id(db, run_id)
+
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    # Store file path before deleting from database
+    file_path = run.file_path
+
+    # Delete from database (this will cascade delete logs)
+    success = crud.delete_run(db, run_id)
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to delete run from database")
+
+    # Delete associated file if it exists
+    if file_path and Path(file_path).exists():
+        try:
+            os.remove(file_path)
+            logger.info(f"Deleted file: {file_path}")
+        except Exception as e:
+            logger.warning(f"Failed to delete file {file_path}: {e}")
+
+    logger.info(f"Admin user_id={current_user.id} deleted run {run_id}")
+
+    return {"message": "Run deleted successfully", "run_id": run_id}
 
 
 @app.get("/api/automation/logs/{run_id}")

@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from pathlib import Path
 
 from db import models
-from core.auth import get_password_hash
+from core.auth import get_password_hash, validate_password
 
 
 # ============================================================================
@@ -13,6 +13,9 @@ from core.auth import get_password_hash
 
 def create_user(db: Session, email: str, password: str, role: str = "user") -> models.User:
     """Create a new user with hashed password"""
+    # Validate password complexity
+    validate_password(password)
+
     password_hash = get_password_hash(password)
     user = models.User(
         email=email,
@@ -53,8 +56,9 @@ def update_user(db: Session, user_id: int, **kwargs) -> Optional[models.User]:
     if not user:
         return None
 
-    # Hash password if provided
+    # Validate and hash password if provided
     if 'password' in kwargs:
+        validate_password(kwargs['password'])
         kwargs['password_hash'] = get_password_hash(kwargs.pop('password'))
 
     # Update allowed fields
@@ -129,6 +133,21 @@ def get_run_by_run_id(db: Session, run_id: str) -> Optional[models.Run]:
 def get_run_by_id(db: Session, id: int) -> Optional[models.Run]:
     """Get run by database ID"""
     return db.query(models.Run).filter(models.Run.id == id).first()
+
+
+def delete_run(db: Session, run_id: str) -> bool:
+    """
+    Delete a run and all associated logs from the database.
+    Returns True if successful, False if run not found.
+    """
+    run = get_run_by_run_id(db, run_id)
+    if not run:
+        return False
+
+    # Delete run (logs will be deleted automatically via cascade)
+    db.delete(run)
+    db.commit()
+    return True
 
 
 def get_all_runs(db: Session, limit: int = 100) -> List[Dict[str, Any]]:

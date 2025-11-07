@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # JWT Authentication settings
     jwt_secret_key: str = secrets.token_urlsafe(32)  # Auto-generate if not in .env
     jwt_algorithm: str = "HS256"
-    jwt_expire_days: int = 7
+    jwt_expire_days: int = 1  # 1 day for security (was 7)
 
     # Session management (relative to project root by default)
     sessions_dir: str = str(Path(__file__).resolve().parent.parent.parent / "automation_sessions")

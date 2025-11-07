@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from datetime import timedelta
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from db.database import get_db
 from db import models
@@ -13,6 +15,9 @@ from core.auth import (
 from core.config import settings
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 
 # ============================================================================
@@ -42,9 +47,11 @@ class UserResponse(BaseModel):
 # ============================================================================
 
 @router.post("/login", response_model=TokenResponse)
-def login(request: LoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")  # 5 login attempts per minute per IP
+def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
     """
     Authenticate user and return JWT access token.
+    Rate limited to 5 attempts per minute per IP address.
 
     Request body:
         {

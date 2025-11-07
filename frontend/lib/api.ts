@@ -80,6 +80,18 @@ export async function getRunLogs(token: string, runId: string): Promise<any> {
   return response.json();
 }
 
+export async function deleteRun(token: string, runId: string): Promise<void> {
+  const response = await fetch(`${API_PROXY_URL}/automation/run/${runId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(token),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to delete run');
+  }
+}
+
 export async function runManualAutomation(
   token: string,
   startDate: string,

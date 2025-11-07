@@ -19,6 +19,7 @@ alembic
 # Authentication & Security
 python-jose[cryptography]
 bcrypt
+slowapi  # Rate limiting
 
 # Selenium automation
 selenium
